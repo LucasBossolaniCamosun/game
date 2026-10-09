@@ -1,3 +1,4 @@
+from Player import Player
 from random import randint
 from Tile import Tile
 
@@ -26,6 +27,14 @@ class Board:
         # Call helper methods to place items
         self.place_barriers()
         self.place_treasures()
+        
+        # Place the player on a free tile
+        while True:
+            r = randint(0, self.size - 1)
+            c = randint(0, self.size - 1)
+            if self.board[r][c].contents == '_':
+                self.player = Player(r, c, self.size)
+                break
 
     def place_barriers(self):
         """
@@ -68,19 +77,58 @@ class Board:
             if self.board[r][c].contents == '_':
                 self.board[r][c].contents = '$'
                 placed += 1
+                
+    def move(self, direction):
+        """
+        Attempts to move the player in the given direction.
+        Handles boundary checks, barrier collisions, and treasure collection.
+        """
+        # Validate direction to throw ValueError to be caught in main.py
+        if direction not in ['U', 'D', 'L', 'R']:
+            raise ValueError("Invalid direction.")
+            
+        # Calculate the intended new position
+        new_row = self.player.row
+        new_col = self.player.col
+        
+        if direction == 'U':
+            new_row -= 1
+        elif direction == 'D':
+            new_row += 1
+        elif direction == 'L':
+            new_col -= 1
+        elif direction == 'R':
+            new_col += 1
+            
+        # Don't move if stepping beyond the board boundary
+        if new_row < 0 or new_row >= self.size or new_col < 0 or new_col >= self.size:
+            return  
+            
+        # Don't move if running into a barrier
+        if self.board[new_row][new_col].contents == 'X':
+            return  
+            
+        # If the move is valid, call the player's move method
+        self.player.move(direction)
+        
+        # If the tile contains a treasure, replace with a blank and add score
+        if self.board[new_row][new_col].contents == '$':
+            self.board[new_row][new_col].contents = '_'  
+            self.player.add_score(1)
 
     def __str__(self):
         """
         Overrides default printing to return a formatted string. 
-        This is required so `print(b)` works correctly in main.py.
+        Includes the player's score and shows the player's location on the board.
         """
-        output = ""
-        for row in self.board:
+        output = f"Player Score: {self.player.get_score()}\n"
+        for r in range(self.size):
             row_list = []
-            for tile in row:
-                row_list.append(tile.contents)
+            for c in range(self.size):
+                # Print the player's name if they are on this tile
+                if r == self.player.row and c == self.player.col:
+                    row_list.append(self.player.name)
+                else:
+                    row_list.append(self.board[r][c].contents)
             output += " ".join(row_list) + "\n"
         return output
-
-
-
