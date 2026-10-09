@@ -1,6 +1,6 @@
 from Board import Board
 
-b = Board(10, 5, 4)
+b = Board(10, 5, 5)
 
 # Repeatedly print the board and prompt the user
 while True:
