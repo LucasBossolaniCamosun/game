@@ -8,6 +8,8 @@ class Board:
         Initializes the board, validates the parameters, and sets up 
         the grid before placing barriers and treasures.
         """
+        if size < 5:
+            raise ValueError("Size must be at least 5.")
         self.size = size
         self.numBarriers = numBarriers
         self.numTreasures = numTreasures
@@ -33,7 +35,7 @@ class Board:
             r = randint(0, self.size - 1)
             c = randint(0, self.size - 1)
             if self.board[r][c].contents == '_':
-                self.player = Player(r, c, self.size)
+                self.player = Player(r, c, 0, self.size)
                 break
 
     def place_barriers(self):
