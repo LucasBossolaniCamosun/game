@@ -29,7 +29,7 @@ def parse_command(data):
             return None
         return ('create', opt >> 1)  
     if cmd in MOVES:
-        return ('move', MOVES[cmd])   
+        return ('move', MOVES[cmd])
     return None         
 def encode_board(board):
     header = bytes([(SRV_BOARD << 6) | (board.size << 2)])
