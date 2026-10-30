@@ -6,4 +6,4 @@ coverage.xml
 # Python
 __pycache__/
 *.pyc
-.pytest_cache/
+.pytest_cache/command.txt
