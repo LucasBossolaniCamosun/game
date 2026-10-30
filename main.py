@@ -28,8 +28,8 @@ def parse_command(data):
         if opt & 1:                  
             return None
         return ('create', opt >> 1)  
-    if cmd in MOVES and opt == 0:
-        return ('move', MOVES[cmd])
+    if cmd in MOVES:
+        return ('move', MOVES[cmd])   
     return None         
 def encode_board(board):
     header = bytes([(SRV_BOARD << 6) | (board.size << 2)])
