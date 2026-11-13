@@ -5,6 +5,7 @@ PORT = 12345
 DEFAULT_SIZE = 10
 
 CMD_CREATE = 0b000
+CMD_PRINT = 0b001
 MOVES = {0b100: 'U', 0b101: 'D', 0b110: 'L', 0b111: 'R'}
 
 SRV_BOARD = 0b00
@@ -28,6 +29,8 @@ def parse_command(data):
         if opt & 1:                  
             return None
         return ('create', opt >> 1)  
+    if cmd == CMD_PRINT:
+        return ('print', None)       
     if cmd in MOVES:
         return ('move', MOVES[cmd])
     return None         
@@ -68,14 +71,16 @@ def handle_message(data, board):
         return [], board
 
     kind, arg = command
+    if kind == 'print':
+        return [encode_board(board), encode_score(board)], board
+
     if kind == 'create':
         try:
             board = create_board(arg)
-        except ValueError:          # e.g. size below 5
+        except ValueError:         
             return [], board
         return [encode_board(board)], board
 
-    # motion command
     old_row, old_col = board.player.get_position()
     board.move(arg)
     new_row, new_col = board.player.get_position()
@@ -88,7 +93,7 @@ def print_hex(data):
 
 
 def print_game(board):
-    print(board)    # Board.__str__ already includes the score
+    print(board)    
 
 
 def serve(board):
@@ -108,7 +113,7 @@ def serve(board):
                 conn.sendall(reply)
             if replies:
                 print_game(board)
-        except Exception as e:       # one bad client must not crash the server
+        except Exception as e:        
             print("Error handling client:", e)
         finally:
             conn.close()

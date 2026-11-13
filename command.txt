@@ -2,8 +2,11 @@
 echo -n '14' | xxd -r -p | nc 127.0.0.1 12345 | xxd   # 10x10
 echo -n '1E' | xxd -r -p | nc 127.0.0.1 12345 | xxd   # 15x15 
 
-#move
-echo -n '80' | xxd -r -p | nc 127.0.0.1 12345 | xxd   # Up    (100 00000)
-echo -n 'A0' | xxd -r -p | nc 127.0.0.1 12345 | xxd   # Down  (101 00000)
-echo -n 'C0' | xxd -r -p | nc 127.0.0.1 12345 | xxd   # Left  (110 00000)
-echo -n 'E0' | xxd -r -p | nc 127.0.0.1 12345 | xxd   # Right (111 00000)
+# Up    (100 00000)
+echo -n '80' | xxd -r -p | nc 127.0.0.1 12345 | xxd  
+# Down  (101 00000) 
+echo -n 'A0' | xxd -r -p | nc 127.0.0.1 12345 | xxd   
+# Left  (110 00000)
+echo -n 'C0' | xxd -r -p | nc 127.0.0.1 12345 | xxd 
+# Right (111 00000)  
+echo -n 'E0' | xxd -r -p | nc 127.0.0.1 12345 | xxd   
