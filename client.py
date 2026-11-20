@@ -1,21 +1,17 @@
-import socket
+import asyncio
 import sys
-import threading
 
 PORT = 12345
 
-# Server -> client message types
 SRV_BOARD, SRV_SCORE, SRV_DELTA = 0b00, 0b01, 0b10
 TILE_CHARS = {0b00: "_", 0b01: "X", 0b10: "1", 0b11: "2"}
-
-# Move directions (top 3 bits); the low 5 bits carry the player: 00000 / 00010
 DIRECTIONS = {"up": 0b100, "down": 0b101, "left": 0b110, "right": 0b111}
 
 
 def command_byte(name, player):
     if name == "print":
         return 0b00100000
-    return (DIRECTIONS[name] << 5) | ((player - 1) << 1)
+    return (DIRECTIONS[name] << 5) | ((player - 1) << 1)   
 
 
 class GameState:
@@ -31,7 +27,6 @@ class GameState:
 
 
 def parse_messages(buf, state):
-    """Apply every COMPLETE message in buf; return the leftover bytes."""
     events = []
     i = 0
     while i < len(buf):
@@ -67,17 +62,12 @@ def parse_messages(buf, state):
     return buf[i:], events
 
 
-def server_listener(s, state, closed):
+async def listen(reader, state):
     buf = b""
     while True:
-        try:
-            chunk = s.recv(1024)
-        except OSError:
-            chunk = b""
+        chunk = await reader.read(1024)
         if not chunk:
-            print("\nServer disconnected (the game may already have 2 players). "
-                  "Press Enter to exit.")
-            closed.set()
+            print("\nServer disconnected. Press Enter to exit.")
             return
         buf, events = parse_messages(buf + chunk, state)
         if events:
@@ -85,41 +75,39 @@ def server_listener(s, state, closed):
             print(state)
 
 
-def main():
+async def main():
     if len(sys.argv) < 3 or sys.argv[2] not in ("1", "2"):
         print("Usage: python3 client.py SERVER_IP 1|2")
         return
     host, player = sys.argv[1], int(sys.argv[2])
 
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
-        s.connect((host, PORT))
+        reader, writer = await asyncio.open_connection(host, PORT)
     except OSError as e:
         print("Could not connect to the server:", e)
         return
 
     state = GameState()
-    closed = threading.Event()
-    threading.Thread(target=server_listener, args=(s, state, closed),
-                     daemon=True).start()
-    s.sendall(bytes([command_byte("print", player)]))
+    listener = asyncio.create_task(listen(reader, state))
+    writer.write(bytes([command_byte("print", player)]))
 
-    while not closed.is_set():
-        choice = input(f"Player {player} command (print/up/down/left/right/"
-                       "create N/quit): ").strip().lower()
-        if closed.is_set() or choice in ("quit", "exit", "q"):
+    while not listener.done():
+        choice = await asyncio.to_thread(
+            input, f"Player {player} command (print/up/down/left/right/create N/quit): ")
+        choice = choice.strip().lower()
+        if listener.done() or choice in ("quit", "exit", "q"):
             break
-        try:
-            if choice == "print" or choice in DIRECTIONS:
-                s.sendall(bytes([command_byte(choice, player)]))
-            elif choice.startswith("create "):
-                s.sendall(bytes([int(choice.split()[1]) << 1]))
-            else:
-                print("Unknown command.")
-        except (ValueError, OSError) as e:
-            print("Could not send:", e)
-    s.close()
+        if choice == "print" or choice in DIRECTIONS:
+            writer.write(bytes([command_byte(choice, player)]))
+        elif choice.startswith("create ") and choice.split()[1].isdigit():
+            writer.write(bytes([int(choice.split()[1]) << 1]))
+        else:
+            print("Unknown command.")
+        await writer.drain()
+
+    listener.cancel()
+    writer.close()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
