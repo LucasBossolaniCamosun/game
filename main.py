@@ -1,7 +1,4 @@
-import queue
-import socket
-import threading
-import traceback
+import asyncio
 
 from Board import Board
 
@@ -13,19 +10,10 @@ CMD_CREATE = 0b000
 CMD_PRINT = 0b001
 MOVES = {0b100: 'U', 0b101: 'D', 0b110: 'L', 0b111: 'R'}
 
-# Server -> client message types (protocol page)
 SRV_BOARD, SRV_SCORE, SRV_DELTA = 0b00, 0b01, 0b10
-
 VAL_BLANK, VAL_BARRIER, VAL_PLAYER1, VAL_PLAYER2 = 0b00, 0b01, 0b10, 0b11
 
-JOIN = None     # marker put on input_queue when a new client connects
 
-# The only two shared objects allowed by the lab
-input_queue = queue.Queue()
-output_queue = queue.Queue()
-
-
-# ---------------------------------------------------------------- encoding
 def create_board(size):
     max_barriers = (size * size // 5) // 4
     max_treasures = size * size // 20
@@ -33,7 +21,6 @@ def create_board(size):
 
 
 def parse_command(byte):
-    """Returns (kind, argument, player_id) or None if the byte is invalid."""
     cmd = byte >> 5
     opt = byte & 0b11111
     if cmd == CMD_CREATE:
@@ -43,8 +30,7 @@ def parse_command(byte):
     if cmd == CMD_PRINT:
         return ('print', None, None)
     if cmd in MOVES:
-        # OPT = 0000 0 -> player 1, 0001 0 -> player 2
-        if opt not in (0b00000, 0b00010):
+        if opt not in (0b00000, 0b00010):      
             return None
         return ('move', MOVES[cmd], (opt >> 1) + 1)
     return None
@@ -80,121 +66,85 @@ def encode_delta(board, row, col):
 
 
 def encode_scores(board):
-    """Score message = 2 bytes: 01 | score1 (4 bits) | score2 (4 bits) | 000000"""
     s1 = (board.players[1].get_score() if 1 in board.players else 0) & 0xF
     s2 = (board.players[2].get_score() if 2 in board.players else 0) & 0xF
-    first = (SRV_SCORE << 6) | (s1 << 2) | (s2 >> 2)
-    second = (s2 & 0b11) << 6
-    return bytes([first, second])
+    return bytes([(SRV_SCORE << 6) | (s1 << 2) | (s2 >> 2), (s2 & 0b11) << 6])
 
 
-# ---------------------------------------------------------------- threads
-def board_thread_worker():
-    """The ONLY thread that creates, reads or changes the board."""
+async def main():
     board = create_board(DEFAULT_SIZE)
-    print(board)
-    while True:
+    writers = {}                      
+
+    async def send(targets, data):
+        for w in targets:
+            try:
+                w.write(data)
+                await w.drain()
+            except ConnectionError:
+                pass
+
+    async def handle_byte(byte, me):
+        nonlocal board
+        command = parse_command(byte)
+        if command is None:
+            return
+        kind, arg, player_id = command
+
+        if kind == 'create':
+            try:
+                new_board = create_board(arg)
+            except ValueError:                    
+                return
+            for pid in board.players:             
+                new_board.add_player(pid)
+            board = new_board
+            print(board)
+            await send(list(writers.values()), encode_board(board))
+
+        elif kind == 'print':
+            await send([writers[me]], encode_board(board))
+
+        elif kind == 'move' and player_id in board.players:
+            old_row, old_col = board.players[player_id].get_position()
+            board.move(player_id, arg)
+            new_row, new_col = board.players[player_id].get_position()
+            print(board)
+            reply = (encode_delta(board, old_row, old_col)
+                     + encode_delta(board, new_row, new_col)
+                     + encode_scores(board))
+            await send(list(writers.values()), reply)
+
+    async def handle_client(reader, writer):
+        free = [p for p in range(1, MAX_PLAYERS + 1) if p not in writers]
+        if not free:                             
+            print("Rejected extra connection")
+            writer.close()
+            return
+        me = free[0]
+        writers[me] = writer
+        board.add_player(me)
+        print(f"Player {me} connected")
+        print(board)
         try:
-            client_id, data = input_queue.get()
+            while True:
+                data = await reader.read(1024)
+                if not data:
+                    break
+                for byte in data:                 
+                    await handle_byte(byte, me)
+        except ConnectionError:
+            pass
+        finally:
+            del writers[me]
+            board.players.pop(me, None)
+            writer.close()
+            print(f"Player {me} disconnected")
 
-            if data is JOIN:                       # a client connected
-                board.add_player(client_id)
-                print(board)
-                continue
-
-            for byte in data:                      # each command is 1 byte
-                command = parse_command(byte)
-                if command is None:
-                    continue
-                kind, arg, player_id = command
-
-                if kind == 'create':
-                    try:
-                        new_board = create_board(arg)
-                    except ValueError:             # e.g. size below 5
-                        continue
-                    for pid in board.players:      # keep the same players
-                        new_board.add_player(pid)
-                    board = new_board
-                    output_queue.put(("ALL", [encode_board(board)]))
-                    print(board)
-
-                elif kind == 'print':
-                    output_queue.put((client_id, [encode_board(board)]))
-
-                elif kind == 'move':
-                    if player_id not in board.players:
-                        continue
-                    old_row, old_col = board.players[player_id].get_position()
-                    board.move(player_id, arg)
-                    new_row, new_col = board.players[player_id].get_position()
-                    output_queue.put(("ALL", [
-                        encode_delta(board, old_row, old_col),
-                        encode_delta(board, new_row, new_col),
-                        encode_scores(board),
-                    ]))
-                    print(board)
-        except Exception as e:
-            print(f"\n--- ERROR IN BOARD THREAD ---\n{e}")
-            traceback.print_exc()
-
-
-def client_read_thread(conn, client_id):
-    try:
-        while True:
-            data = conn.recv(1024)
-            if not data:
-                break
-            input_queue.put((client_id, data))
-    except Exception:
-        pass
-    finally:
-        conn.close()
-        print(f"Player {client_id} disconnected")
-
-
-def output_thread_worker(connections):
-    while True:
-        target, replies = output_queue.get()
-        if target == "ALL":
-            targets = list(connections.values())   # copy: dict may change
-        else:
-            targets = [connections.get(target)]
-        message = b''.join(replies)
-        for conn in targets:
-            if conn:
-                try:
-                    conn.sendall(message)
-                except Exception:
-                    pass
-
-
-def main():
-    connections = {}
-    threading.Thread(target=board_thread_worker, daemon=True).start()
-    threading.Thread(target=output_thread_worker, args=(connections,),
-                     daemon=True).start()
-
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    server.bind(("", PORT))
-    server.listen()
+    server = await asyncio.start_server(handle_client, "", PORT)
     print(f"Listening on port {PORT}")
-
-    player_count = 1
-    while True:
-        conn, addr = server.accept()
-        if player_count <= MAX_PLAYERS:
-            print(f"Player {player_count} connected from {addr}")
-            connections[player_count] = conn
-            input_queue.put((player_count, JOIN))   # board thread adds the player
-            threading.Thread(target=client_read_thread,
-                             args=(conn, player_count), daemon=True).start()
-            player_count += 1
-        else:
-            print(f"Rejected extra connection from {addr}")
-            conn.close()
+    async with server:
+        await server.serve_forever()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
