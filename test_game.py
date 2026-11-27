@@ -4,7 +4,6 @@ from Board import Board
 from Player import Player
 
 
-# Required tests 
 def test_player():
     p = Player(1, 2, 3, 10)
     assert p.get_position() == (1, 2)
@@ -21,7 +20,6 @@ def test_board():
         b = Board(0, 0, 0)
 
 
-# Helper: board with no barriers/treasures and a known player spot
 def clean_board(size=5, player_pos=(2, 2)):
     b = Board(size, 0, 0)
     for r in range(size):
@@ -31,7 +29,6 @@ def clean_board(size=5, player_pos=(2, 2)):
     return b
 
 
-# Player
 def test_player_name_auto_increments():
     p1 = Player(0, 0, 0, 5)
     p2 = Player(0, 0, 0, 5)
@@ -77,7 +74,6 @@ def test_player_move_invalid_direction_raises():
         p.move('X')
 
 
-# Board setup and exceptions
 def test_board_too_many_barriers_raises():
     with pytest.raises(ValueError, match='20%'):
         Board(5, 2, 0)
@@ -100,7 +96,6 @@ def test_board_player_starts_on_free_tile():
         assert b.board[b.player.row][b.player.col].contents == '_'
 
 
-# Board movement
 def test_board_move_off_edge_is_ignored():
     b = clean_board(player_pos=(0, 0))
     b.move('U')
@@ -129,7 +124,6 @@ def test_board_move_invalid_direction_raises():
         b.move('X')
 
 
-# Normal game play
 def test_normal_game_play():
     b = clean_board(size=5, player_pos=(0, 0))
     b.board[0][1].contents = '$'

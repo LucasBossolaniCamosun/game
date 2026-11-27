@@ -37,46 +37,21 @@ class Player:
         self.board_size = board_size
 
     def get_position(self):
-        """
-        Returns:
-            tuple: The player's location as (row, col).
-        """
+
         return (self.row, self.col)
 
     def add_score(self, points):
-        """
-        Adds points to the player's existing score.
 
-        Args:
-            points (int): The amount to add.
-
-        Raises:
-            ValueError: If points is negative.
-        """
         if points < 0:
             raise ValueError("Cannot add a negative score.")
         self.score += points
 
     def get_score(self):
-        """
-        Returns:
-            int: The player's current score.
-        """
+ 
         return self.score
 
     def move(self, direction, extra=None):
-        """
-        Moves the player one cell in the given direction, if possible.
-        If the move would leave the board, the command is ignored.
 
-        Args:
-            direction (str): 'U', 'D', 'L', or 'R'.
-            extra: Accepted (and ignored) so the provided test, which passes
-                a second argument, still runs.
-
-        Raises:
-            ValueError: If direction is not one of 'U', 'D', 'L', 'R'.
-        """
         if direction not in ('U', 'D', 'L', 'R'):
             raise ValueError("Invalid direction. Use U, D, L, or R.")
 
@@ -90,9 +65,6 @@ class Player:
             self.col += 1
 
     def __str__(self):
-        """
-        Returns:
-            str: A description of the player's name, position, and score.
-        """
+
         return ("Player " + self.name + " is at (" + str(self.row) + ", "
                 + str(self.col) + ") with score: " + str(self.score))

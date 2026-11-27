@@ -19,7 +19,7 @@ class Board:
             raise ValueError("The treasures cannot take up more than 5% of the board.")
             
         self.board = [[Tile('_') for _ in range(self.size)] for _ in range(self.size)]
-        self.players = {} # Dictionary mapping player_id to Player object
+        self.players = {} 
         
         self.place_barriers()
         self.place_treasures()
@@ -32,7 +32,6 @@ class Board:
             occupied = any((p.row, p.col) == (r, c) for p in self.players.values())
             if self.board[r][c].contents == '_' and not occupied:
                 self.players[player_id] = Player(r, c, 0, self.size)
-                # Force the name to match the player_id for protocol simplicity
                 self.players[player_id].name = str(player_id)
                 break
 
@@ -80,7 +79,6 @@ class Board:
         if self.board[new_row][new_col].contents == 'X':
             return  
             
-        # Prevent moving onto the other player
         for pid, p in self.players.items():
             if pid != player_id and p.row == new_row and p.col == new_col:
                 return
